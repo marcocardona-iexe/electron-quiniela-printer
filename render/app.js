@@ -95,50 +95,68 @@ async function imprimirLote() {
     return;
   }
 
+  cancelarImpresion = false;
+  imprimiendo = true;
+
   const inicioFila = parseInt(document.getElementById("filaInicio").value) || 1;
   const finFila =
     parseInt(document.getElementById("filaFin").value) || quinielas.length;
   const inicioConsecutivo =
     parseInt(document.getElementById("inicioConsecutivo").value) || 1;
 
-  // 🔽 AQUI AGREGAS ESTO (número de concurso fijo)
   document.getElementById("numeroConcursoTicket").textContent =
     document.getElementById("numeroConcurso").value || "1";
 
-  // Validaciones
   if (inicioFila < 1 || finFila > quinielas.length || inicioFila > finFila) {
     mostrarAlerta("Rango de filas inválido", "danger");
+    imprimiendo = false;
     return;
   }
 
-  let consecutivo = inicioConsecutivo;
-
-  // Ajuste porque el usuario cuenta desde 1 y el array desde 0
-  const subset = quinielas.slice(inicioFila - 1, finFila);
+  const subset = quinielas.slice(inicioFila - 1, finFila).reverse();
+  let consecutivoFinal = inicioConsecutivo + subset.length - 1;
 
   for (let i = 0; i < subset.length; i++) {
-    renderizarBoleto(subset[i], consecutivo++);
+    if (cancelarImpresion) {
+      mostrarAlerta("Impresión detenida por el usuario", "warning");
+      imprimiendo = false;
+      return;
+    }
+
+    renderizarBoleto(subset[i], consecutivoFinal--);
+
     await new Promise((r) => setTimeout(r, 250));
+
+    if (cancelarImpresion) {
+      mostrarAlerta("Impresión detenida", "warning");
+      imprimiendo = false;
+      return;
+    }
+
     await window.electronAPI.printTicket(impresoraSeleccionada);
+
     await new Promise((r) => setTimeout(r, 1300));
   }
 
+  imprimiendo = false;
   mostrarAlerta(`Lote terminado (${inicioFila} - ${finFila})`, "success");
 }
 
-document.getElementById("printAll").addEventListener("click", () => {
-  if (!quinielas.length) {
-    mostrarAlerta("Carga un archivo primero", "danger");
-    return;
-  }
+// document.getElementById("printAll").addEventListener("click", () => {
+//   if (!quinielas.length) {
+//     mostrarAlerta("Carga un archivo primero", "danger");
+//     return;
+//   }
 
-  // ✅ NUEVA VALIDACIÓN DEL FORMULARIO
-  if (!validarFormulario()) return;
+//   // ✅ NUEVA VALIDACIÓN DEL FORMULARIO
+//   if (!validarFormulario()) return;
 
-  imprimirLote();
-});
+//   imprimirLote();
+// });
 
 let impresoraSeleccionada = "";
+let cancelarImpresion = false;
+let imprimiendo = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
   const select = document.getElementById("printerSelect");
@@ -255,3 +273,24 @@ function validarFormulario() {
 
   return true;
 }
+
+const btnPrint = document.getElementById("printAll");
+const btnStop = document.getElementById("stopPrint");
+
+btnPrint.addEventListener("click", () => {
+  if (imprimiendo) return;
+
+  if (!validarFormulario()) return;
+
+  btnPrint.disabled = true;
+  btnStop.disabled = false;
+
+  imprimirLote().finally(() => {
+    btnPrint.disabled = false;
+    btnStop.disabled = true;
+  });
+});
+
+btnStop.addEventListener("click", () => {
+  cancelarImpresion = true;
+});
